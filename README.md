@@ -62,7 +62,8 @@ npm install
 
 1. Create a `.env` file in the server directory:
 ```env
-MONGODB_URI=your_mongodb_uri
+MONGODB_URI= mongodb://localhost:27017/taskmanager
+
 PORT=5000
 ```
 
