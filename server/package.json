@@ -1,15 +1,15 @@
 {
     "name": "task-manager-server",
     "version": "1.0.0",
-    "description": "Real-time task manager server",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
+        "build": "npm install",
         "dev": "nodemon server.js"
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
+    "engines": {
+        "node": ">=14.0.0"
+    },
     "dependencies": {
         "cors": "^2.8.5",
         "dotenv": "^16.0.3",
