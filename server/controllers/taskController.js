@@ -7,20 +7,24 @@ const taskController = {
             const { status, sortBy } = req.query;
             let query = {};
 
-            // Filter by status if provided
             if (status) {
                 query.status = status;
             }
 
-            // Build sort object
-            let sort = {};
-            if (sortBy === 'dueDate') {
-                sort.dueDate = 1;
-            } else if (sortBy === 'priority') {
-                sort.priority = -1;
+            let tasks = await Task.find(query);
+
+            if (sortBy) {
+                switch (sortBy) {
+                    case 'dueDate':
+                        tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+                        break;
+                    case 'priority':
+                        const priorityOrder = { high: 3, medium: 2, low: 1 };
+                        tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+                        break;
+                }
             }
 
-            const tasks = await Task.find(query).sort(sort);
             res.json(tasks);
         } catch (error) {
             res.status(500).json({ message: error.message });
@@ -35,11 +39,24 @@ const taskController = {
 
             // Emit socket event for real-time update
             const io = req.app.get('io');
-            io.to(req.body.assignedTo).emit('taskCreated', savedTask);
+            io.emit('taskCreated', savedTask);
 
             res.status(201).json(savedTask);
         } catch (error) {
             res.status(400).json({ message: error.message });
+        }
+    },
+
+    // Get task by ID
+    getTaskById: async (req, res) => {
+        try {
+            const task = await Task.findById(req.params.id);
+            if (!task) {
+                return res.status(404).json({ message: 'Task not found' });
+            }
+            res.json(task);
+        } catch (error) {
+            res.status(500).json({ message: error.message });
         }
     },
 
@@ -58,7 +75,7 @@ const taskController = {
 
             // Emit socket event for real-time update
             const io = req.app.get('io');
-            io.to(task.assignedTo).emit('taskUpdated', task);
+            io.emit('taskUpdated', task);
 
             res.json(task);
         } catch (error) {
@@ -77,24 +94,9 @@ const taskController = {
 
             // Emit socket event for real-time update
             const io = req.app.get('io');
-            io.to(task.assignedTo).emit('taskDeleted', req.params.id);
+            io.emit('taskDeleted', req.params.id);
 
             res.json({ message: 'Task deleted successfully' });
-        } catch (error) {
-            res.status(500).json({ message: error.message });
-        }
-    },
-
-    // Get task by ID
-    getTaskById: async (req, res) => {
-        try {
-            const task = await Task.findById(req.params.id);
-
-            if (!task) {
-                return res.status(404).json({ message: 'Task not found' });
-            }
-
-            res.json(task);
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
