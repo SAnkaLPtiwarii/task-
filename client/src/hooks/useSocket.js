@@ -2,40 +2,46 @@ import { useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 
 export const useSocket = () => {
-    const socket = useRef(null);
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://taskoo-g77y.onrender.com';
+    const socketRef = useRef(null);
+    const SOCKET_URL = import.meta.env.VITE_API_URL;
 
     useEffect(() => {
-        if (!socket.current) {
-            socket.current = io(SOCKET_URL, {
-                withCredentials: true,
-                transports: ['websocket', 'polling'],
+        // Create socket connection
+        if (!socketRef.current) {
+            socketRef.current = io(SOCKET_URL, {
+                transports: ['polling', 'websocket'],
+                path: '/socket.io',
                 reconnection: true,
                 reconnectionAttempts: 5,
                 reconnectionDelay: 1000,
-                timeout: 20000
+                timeout: 20000,
+                withCredentials: true,
+                autoConnect: true
             });
 
-            socket.current.on('connect', () => {
+            // Connection handlers
+            socketRef.current.on('connect', () => {
                 console.log('Socket connected successfully');
+                // Join user room
+                socketRef.current.emit('join', 'user123'); // Replace with actual user ID
             });
 
-            socket.current.on('connect_error', (error) => {
+            socketRef.current.on('connect_error', (error) => {
                 console.error('Socket connection error:', error);
             });
 
-            socket.current.on('error', (error) => {
-                console.error('Socket error:', error);
+            socketRef.current.on('disconnect', (reason) => {
+                console.log('Socket disconnected:', reason);
             });
         }
 
+        // Cleanup on unmount
         return () => {
-            if (socket.current) {
-                socket.current.disconnect();
-                socket.current = null;
+            if (socketRef.current) {
+                socketRef.current.disconnect();
             }
         };
     }, [SOCKET_URL]);
 
-    return socket.current;
+    return socketRef.current;
 };

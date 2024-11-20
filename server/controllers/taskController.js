@@ -4,40 +4,20 @@ const taskController = {
     // Get all tasks
     getAllTasks: async (req, res) => {
         try {
-            const { status, sortBy } = req.query;
-            let query = {};
-
-            if (status) {
-                query.status = status;
-            }
-
-            let tasks = await Task.find(query);
-
-            if (sortBy) {
-                switch (sortBy) {
-                    case 'dueDate':
-                        tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-                        break;
-                    case 'priority':
-                        const priorityOrder = { high: 3, medium: 2, low: 1 };
-                        tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
-                        break;
-                }
-            }
-
+            const tasks = await Task.find().sort({ updatedAt: -1 });
             res.json(tasks);
         } catch (error) {
             res.status(500).json({ message: error.message });
         }
     },
 
-    // Create new task
+    // Create task
     createTask: async (req, res) => {
         try {
             const task = new Task(req.body);
             const savedTask = await task.save();
 
-            // Emit socket event for real-time update
+            // Emit socket event
             const io = req.app.get('io');
             io.emit('taskCreated', savedTask);
 
@@ -47,37 +27,24 @@ const taskController = {
         }
     },
 
-    // Get task by ID
-    getTaskById: async (req, res) => {
-        try {
-            const task = await Task.findById(req.params.id);
-            if (!task) {
-                return res.status(404).json({ message: 'Task not found' });
-            }
-            res.json(task);
-        } catch (error) {
-            res.status(500).json({ message: error.message });
-        }
-    },
-
     // Update task
     updateTask: async (req, res) => {
         try {
-            const task = await Task.findByIdAndUpdate(
+            const updatedTask = await Task.findByIdAndUpdate(
                 req.params.id,
                 req.body,
-                { new: true }
+                { new: true, runValidators: true }
             );
 
-            if (!task) {
+            if (!updatedTask) {
                 return res.status(404).json({ message: 'Task not found' });
             }
 
-            // Emit socket event for real-time update
+            // Emit socket event
             const io = req.app.get('io');
-            io.emit('taskUpdated', task);
+            io.emit('taskUpdated', updatedTask);
 
-            res.json(task);
+            res.json(updatedTask);
         } catch (error) {
             res.status(400).json({ message: error.message });
         }
@@ -86,17 +53,19 @@ const taskController = {
     // Delete task
     deleteTask: async (req, res) => {
         try {
-            const task = await Task.findByIdAndDelete(req.params.id);
+            const task = await Task.findById(req.params.id);
 
             if (!task) {
                 return res.status(404).json({ message: 'Task not found' });
             }
 
-            // Emit socket event for real-time update
+            await task.remove();
+
+            // Emit socket event
             const io = req.app.get('io');
             io.emit('taskDeleted', req.params.id);
 
-            res.json({ message: 'Task deleted successfully' });
+            res.json({ message: 'Task deleted' });
         } catch (error) {
             res.status(500).json({ message: error.message });
         }

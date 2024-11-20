@@ -8,68 +8,66 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration with all required headers
+// CORS Configuration
 app.use(cors({
-    origin: ['https://673dd124e23324a5543d2728--inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
+    origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
-    optionsSuccessStatus: 200
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Socket.IO setup with CORS
+// Socket.IO Configuration
 const io = socketIo(server, {
+    path: '/socket.io',
     cors: {
-        origin: ['https://673dd124e23324a5543d2728--inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
+        origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
         methods: ["GET", "POST", "PUT", "DELETE"],
-        allowedHeaders: ["Content-Type", "Authorization"],
-        credentials: true
+        credentials: true,
+        allowedHeaders: ["Content-Type", "Authorization"]
     },
-    transports: ['websocket', 'polling']
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
-// Root route
-app.get('/', (req, res) => {
-    res.json({
-        message: 'Task Manager API is running',
-        status: 'active',
-        endpoints: {
-            tasks: '/api/tasks',
-            health: '/health'
-        }
+
+// Middleware
+app.use(express.json());
+
+// Socket Connection Handler
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    // Join room for specific user
+    socket.on('join', (userId) => {
+        socket.join(userId);
+        console.log(`User ${userId} joined room`);
+    });
+
+    // Handle disconnection
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+
+    // Handle errors
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
     });
 });
 
-// Health check route
+// Make io accessible to routes
+app.set('io', io);
+
+// Routes
+const taskRoutes = require('./routes/taskRoutes');
+app.use('/api/tasks', taskRoutes);
+
+// Health check endpoint
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         time: new Date().toISOString(),
-        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
-    });
-});
-
-// API routes
-app.use('/api/tasks', taskRoutes);
-
-// Handle 404 errors
-app.use('*', (req, res) => {
-    res.status(404).json({
-        error: 'Not Found',
-        message: 'The requested resource was not found on this server',
-        availableRoutes: [
-            '/',
-            '/health',
-            '/api/tasks'
-        ]
-    });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        error: 'Internal Server Error',
-        message: err.message
+        mongodbStatus: mongoose.connection.readyState
     });
 });
 

@@ -59,12 +59,24 @@ export const TaskProvider = ({ children }) => {
     // Update task
     const updateTask = async (taskId, taskData) => {
         try {
+            // Optimistic update
+            const updatedTask = { ...taskData, _id: taskId };
+            setTasks(prev => prev.map(task =>
+                task._id === taskId ? updatedTask : task
+            ));
+
+            // Make API call
             const response = await api.put(`/api/tasks/${taskId}`, taskData);
+
+            // Update with server response
             setTasks(prev => prev.map(task =>
                 task._id === taskId ? response.data : task
             ));
+
             toast.success('Task updated successfully');
         } catch (error) {
+            // Revert on error
+            fetchTasks(); // Refresh tasks from server
             console.error('Error updating task:', error);
             toast.error('Failed to update task');
         }
