@@ -3,54 +3,29 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { useSocket } from '../hooks/useSocket';
 
-const TaskContext = createContext(null);
+const TaskContext = createContext();
 
-export const useTaskContext = () => {
+export function useTaskContext() {
     const context = useContext(TaskContext);
     if (!context) {
         throw new Error('useTaskContext must be used within a TaskProvider');
     }
     return context;
-};
+}
 
-export const TaskProvider = ({ children }) => {
+export function TaskProvider({ children }) {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({
         status: '',
-        sortBy: '',
-        priority: ''
+        priority: '',
+        sortBy: ''
     });
 
     const socket = useSocket();
     const API_URL = import.meta.env.VITE_API_URL;
 
-    // Filter tasks based on current filters
-    const getFilteredTasks = () => {
-        return tasks.filter(task => {
-            if (filters.status && task.status !== filters.status) return false;
-            if (filters.priority && task.priority !== filters.priority) return false;
-            return true;
-        });
-    };
-
-    // Sort filtered tasks
-    const getSortedTasks = (filteredTasks) => {
-        if (!filters.sortBy) return filteredTasks;
-
-        return [...filteredTasks].sort((a, b) => {
-            switch (filters.sortBy) {
-                case 'dueDate':
-                    return new Date(a.dueDate) - new Date(b.dueDate);
-                case 'priority':
-                    const priorityOrder = { high: 3, medium: 2, low: 1 };
-                    return priorityOrder[b.priority] - priorityOrder[a.priority];
-                default:
-                    return 0;
-            }
-        });
-    };
-
+    // Fetch tasks
     const fetchTasks = async () => {
         try {
             setLoading(true);
@@ -59,18 +34,17 @@ export const TaskProvider = ({ children }) => {
         } catch (error) {
             console.error('Error fetching tasks:', error);
             toast.error('Failed to fetch tasks');
-            setTasks([]);
         } finally {
             setLoading(false);
         }
     };
 
+    // Create task
     const createTask = async (taskData) => {
         try {
             const response = await axios.post(`${API_URL}/api/tasks`, taskData);
-            // Don't update state here, let the socket handle it
+            setTasks(prev => [...prev, response.data]);
             toast.success('Task created successfully');
-            return response.data;
         } catch (error) {
             console.error('Error creating task:', error);
             toast.error('Failed to create task');
@@ -78,12 +52,14 @@ export const TaskProvider = ({ children }) => {
         }
     };
 
+    // Update task
     const updateTask = async (taskId, taskData) => {
         try {
             const response = await axios.put(`${API_URL}/api/tasks/${taskId}`, taskData);
-            // Don't update state here, let the socket handle it
+            setTasks(prev => prev.map(task =>
+                task._id === taskId ? response.data : task
+            ));
             toast.success('Task updated successfully');
-            return response.data;
         } catch (error) {
             console.error('Error updating task:', error);
             toast.error('Failed to update task');
@@ -91,10 +67,11 @@ export const TaskProvider = ({ children }) => {
         }
     };
 
+    // Delete task
     const deleteTask = async (taskId) => {
         try {
             await axios.delete(`${API_URL}/api/tasks/${taskId}`);
-            // Don't update state here, let the socket handle it
+            setTasks(prev => prev.filter(task => task._id !== taskId));
             toast.success('Task deleted successfully');
         } catch (error) {
             console.error('Error deleting task:', error);
@@ -103,62 +80,76 @@ export const TaskProvider = ({ children }) => {
         }
     };
 
+    // Get filtered and sorted tasks
+    const getFilteredAndSortedTasks = () => {
+        let filteredTasks = [...tasks];
+
+        // Apply filters
+        if (filters.status) {
+            filteredTasks = filteredTasks.filter(task => task.status === filters.status);
+        }
+        if (filters.priority) {
+            filteredTasks = filteredTasks.filter(task => task.priority === filters.priority);
+        }
+
+        // Apply sorting
+        if (filters.sortBy) {
+            filteredTasks.sort((a, b) => {
+                switch (filters.sortBy) {
+                    case 'dueDate':
+                        return new Date(a.dueDate) - new Date(b.dueDate);
+                    case 'priority':
+                        const priorityOrder = { high: 3, medium: 2, low: 1 };
+                        return priorityOrder[b.priority] - priorityOrder[a.priority];
+                    default:
+                        return 0;
+                }
+            });
+        }
+
+        return filteredTasks;
+    };
+
     // Socket event handlers
     useEffect(() => {
         if (!socket) return;
 
-        const handleTaskCreated = (newTask) => {
-            setTasks(prev => {
-                // Check if task already exists
-                if (prev.some(task => task._id === newTask._id)) {
-                    return prev;
-                }
-                return [...prev, newTask];
-            });
-        };
+        socket.on('taskCreated', (newTask) => {
+            setTasks(prev => [...prev, newTask]);
+        });
 
-        const handleTaskUpdated = (updatedTask) => {
+        socket.on('taskUpdated', (updatedTask) => {
             setTasks(prev => prev.map(task =>
                 task._id === updatedTask._id ? updatedTask : task
             ));
-        };
+        });
 
-        const handleTaskDeleted = (taskId) => {
+        socket.on('taskDeleted', (taskId) => {
             setTasks(prev => prev.filter(task => task._id !== taskId));
-        };
-
-        socket.on('taskCreated', handleTaskCreated);
-        socket.on('taskUpdated', handleTaskUpdated);
-        socket.on('taskDeleted', handleTaskDeleted);
+        });
 
         return () => {
-            socket.off('taskCreated', handleTaskCreated);
-            socket.off('taskUpdated', handleTaskUpdated);
-            socket.off('taskDeleted', handleTaskDeleted);
+            socket.off('taskCreated');
+            socket.off('taskUpdated');
+            socket.off('taskDeleted');
         };
     }, [socket]);
 
-    // Fetch tasks initially
+    // Initial fetch
     useEffect(() => {
         fetchTasks();
     }, []);
 
-    // Get filtered and sorted tasks
-    const filteredTasks = getFilteredTasks();
-    const sortedAndFilteredTasks = getSortedTasks(filteredTasks);
+    const value = {
+        tasks: getFilteredAndSortedTasks(),
+        loading,
+        filters,
+        setFilters,
+        createTask,
+        updateTask,
+        deleteTask,
+        fetchTasks
+    };
 
-    return (
-        <TaskContext.Provider value={{
-            tasks: sortedAndFilteredTasks,
-            loading,
-            filters,
-            setFilters,
-            createTask,
-            updateTask,
-            deleteTask,
-            fetchTasks
-        }}>
-            {children}
-        </TaskContext.Provider>
-    );
-};
+    return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
+}
