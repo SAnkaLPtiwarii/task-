@@ -12,64 +12,10 @@ const server = http.createServer(app);
 app.use(cors({
     origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
+    credentials: true
 }));
 
-// Socket.IO Configuration
-const io = socketIo(server, {
-    path: '/socket.io',
-    cors: {
-        origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
-        methods: ["GET", "POST", "PUT", "DELETE"],
-        credentials: true,
-        allowedHeaders: ["Content-Type", "Authorization"]
-    },
-    transports: ['polling', 'websocket'],
-    allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000
-});
-
-// Middleware
 app.use(express.json());
-
-// Socket Connection Handler
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
-    // Join room for specific user
-    socket.on('join', (userId) => {
-        socket.join(userId);
-        console.log(`User ${userId} joined room`);
-    });
-
-    // Handle disconnection
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
-
-    // Handle errors
-    socket.on('error', (error) => {
-        console.error('Socket error:', error);
-    });
-});
-
-// Make io accessible to routes
-app.set('io', io);
-
-// Routes
-const taskRoutes = require('./routes/taskRoutes');
-app.use('/api/tasks', taskRoutes);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'healthy',
-        time: new Date().toISOString(),
-        mongodbStatus: mongoose.connection.readyState
-    });
-});
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
@@ -79,7 +25,78 @@ mongoose.connect(process.env.MONGODB_URI, {
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
 
+// Socket.IO setup
+const io = socketIo(server, {
+    cors: {
+        origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
+    }
+});
+
+// Socket connection handling
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+});
+
+// Make io accessible to routes
+app.set('io', io);
+
+// Base route
+app.get('/', (req, res) => {
+    res.json({ message: 'Task Manager API is running' });
+});
+
+// Health check route
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
+
+// Task routes
+const taskRoutes = require('./routes/taskRoutes');
+app.use('/api/tasks', taskRoutes);
+
+// 404 handler
+app.use((req, res, next) => {
+    res.status(404).json({
+        error: 'Not Found',
+        message: `Cannot ${req.method} ${req.url}`,
+        availableRoutes: [
+            '/',
+            '/health',
+            '/api/tasks'
+        ]
+    });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        error: true,
+        message: process.env.NODE_ENV === 'production'
+            ? 'Something went wrong'
+            : err.message
+    });
+});
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled promise rejection:', err);
+    // Don't exit the process in production
+    if (process.env.NODE_ENV !== 'production') {
+        process.exit(1);
+    }
 });

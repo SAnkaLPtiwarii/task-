@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { useSocket } from '../hooks/useSocket';
 
-const TaskContext = createContext();
+const TaskContext = createContext(null);
 
 export const useTaskContext = () => {
     const context = useContext(TaskContext);
@@ -16,20 +16,17 @@ export const useTaskContext = () => {
 export const TaskProvider = ({ children }) => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({ status: '', sortBy: '' }); // Initialize filters
     const socket = useSocket();
 
-    const API_URL = import.meta.env.VITE_API_URL || 'https://taskoo-g77y.onrender.com';
+    const API_URL = import.meta.env.VITE_API_URL;
 
     const api = axios.create({
         baseURL: API_URL,
         headers: {
             'Content-Type': 'application/json'
-        },
-        withCredentials: true
+        }
     });
 
-    // Fetch tasks
     const fetchTasks = async () => {
         try {
             setLoading(true);
@@ -38,13 +35,11 @@ export const TaskProvider = ({ children }) => {
         } catch (error) {
             console.error('Error fetching tasks:', error);
             toast.error('Failed to fetch tasks');
-            setTasks([]); // Set empty array on error
         } finally {
             setLoading(false);
         }
     };
 
-    // Create task
     const createTask = async (taskData) => {
         try {
             const response = await api.post('/api/tasks', taskData);
@@ -56,77 +51,62 @@ export const TaskProvider = ({ children }) => {
         }
     };
 
-    // Update task
     const updateTask = async (taskId, taskData) => {
         try {
-            // Optimistic update
-            const updatedTask = { ...taskData, _id: taskId };
-            setTasks(prev => prev.map(task =>
-                task._id === taskId ? updatedTask : task
-            ));
-
-            // Make API call
             const response = await api.put(`/api/tasks/${taskId}`, taskData);
-
-            // Update with server response
             setTasks(prev => prev.map(task =>
                 task._id === taskId ? response.data : task
             ));
-
             toast.success('Task updated successfully');
         } catch (error) {
-            // Revert on error
-            fetchTasks(); // Refresh tasks from server
             console.error('Error updating task:', error);
             toast.error('Failed to update task');
         }
     };
 
-    // Delete task
+    // Improved delete task function
     const deleteTask = async (taskId) => {
         try {
-            await api.delete(`/api/tasks/${taskId}`);
+            // Optimistic update
             setTasks(prev => prev.filter(task => task._id !== taskId));
+
+            await api.delete(`/api/tasks/${taskId}`);
             toast.success('Task deleted successfully');
         } catch (error) {
+            // Revert on error
             console.error('Error deleting task:', error);
             toast.error('Failed to delete task');
+            // Reload tasks to ensure consistency
+            fetchTasks();
         }
     };
 
-    // Socket connection effect
     useEffect(() => {
-        if (!socket) return;
+        if (socket) {
+            socket.on('taskCreated', (newTask) => {
+                setTasks(prev => [...prev, newTask]);
+            });
 
-        const handleTaskCreated = (newTask) => {
-            setTasks(prev => [...prev, newTask]);
-            toast.success('New task added');
-        };
+            socket.on('taskUpdated', (updatedTask) => {
+                setTasks(prev => prev.map(task =>
+                    task._id === updatedTask._id ? updatedTask : task
+                ));
+            });
 
-        const handleTaskUpdated = (updatedTask) => {
-            setTasks(prev => prev.map(task =>
-                task._id === updatedTask._id ? updatedTask : task
-            ));
-            toast.success('Task updated');
-        };
-
-        const handleTaskDeleted = (taskId) => {
-            setTasks(prev => prev.filter(task => task._id !== taskId));
-            toast.success('Task deleted');
-        };
-
-        socket.on('taskCreated', handleTaskCreated);
-        socket.on('taskUpdated', handleTaskUpdated);
-        socket.on('taskDeleted', handleTaskDeleted);
+            socket.on('taskDeleted', (deletedTaskId) => {
+                setTasks(prev => prev.filter(task => task._id !== deletedTaskId));
+            });
+        }
 
         return () => {
-            socket.off('taskCreated', handleTaskCreated);
-            socket.off('taskUpdated', handleTaskUpdated);
-            socket.off('taskDeleted', handleTaskDeleted);
+            if (socket) {
+                socket.off('taskCreated');
+                socket.off('taskUpdated');
+                socket.off('taskDeleted');
+            }
         };
     }, [socket]);
 
-    // Initial fetch
     useEffect(() => {
         fetchTasks();
     }, []);
@@ -135,8 +115,6 @@ export const TaskProvider = ({ children }) => {
         <TaskContext.Provider value={{
             tasks,
             loading,
-            filters,
-            setFilters,
             createTask,
             updateTask,
             deleteTask,

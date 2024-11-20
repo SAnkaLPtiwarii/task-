@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const taskSchema = new mongoose.Schema({
     title: {
         type: String,
-        required: true,
+        required: [true, 'Title is required'],
         trim: true
     },
     description: {
@@ -35,5 +35,10 @@ const taskSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Add indexes for better performance
+taskSchema.index({ status: 1 });
+taskSchema.index({ priority: 1 });
+taskSchema.index({ dueDate: 1 });
 
 module.exports = mongoose.model('Task', taskSchema);

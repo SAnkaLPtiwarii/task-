@@ -14,11 +14,12 @@ import {
 } from '@heroicons/react/24/outline';
 
 const TaskItem = ({ task }) => {
-    const { updateTask, deleteTask } = useTaskContext();
+    const { deleteTask, updateTask } = useTaskContext();
     const [isEditing, setIsEditing] = useState(false);
     const [editedTask, setEditedTask] = useState(task);
     const [isHovered, setIsHovered] = useState(false);
 
+    // Configuration for priority styles and labels
     const priorityConfig = {
         low: {
             color: 'bg-emerald-50 text-emerald-600 border-emerald-200',
@@ -37,6 +38,7 @@ const TaskItem = ({ task }) => {
         }
     };
 
+    // Configuration for status styles
     const statusConfig = {
         pending: {
             color: 'bg-yellow-100 text-yellow-800',
@@ -55,18 +57,19 @@ const TaskItem = ({ task }) => {
         }
     };
 
+    // Handle status cycling (pending -> in_progress -> completed)
     const handleStatusChange = async () => {
-        const statusOrder = ['pending', 'in_progress', 'completed'];
-        const currentIndex = statusOrder.indexOf(task.status);
-        const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
-        await updateTask(task._id, { ...task, status: nextStatus });
+        try {
+            const statusOrder = ['pending', 'in_progress', 'completed'];
+            const currentIndex = statusOrder.indexOf(task.status);
+            const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
+            await updateTask(task._id, { ...task, status: nextStatus });
+        } catch (error) {
+            console.error('Error updating status:', error);
+        }
     };
 
-    const handleSave = async () => {
-        await updateTask(task._id, editedTask);
-        setIsEditing(false);
-    };
-
+    // Handle form field changes
     const handleChange = (e) => {
         const { name, value } = e.target;
         setEditedTask(prev => ({
@@ -75,6 +78,28 @@ const TaskItem = ({ task }) => {
         }));
     };
 
+    // Handle save changes
+    const handleSave = async () => {
+        try {
+            await updateTask(task._id, editedTask);
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Error saving task:', error);
+        }
+    };
+
+    // Handle delete task
+    const handleDelete = async () => {
+        try {
+            if (window.confirm('Are you sure you want to delete this task?')) {
+                await deleteTask(task._id);
+            }
+        } catch (error) {
+            console.error('Error deleting task:', error);
+        }
+    };
+
+    // Calculate days remaining until due date
     const calculateDaysLeft = () => {
         const dueDate = new Date(task.dueDate);
         const today = new Date();
@@ -93,15 +118,19 @@ const TaskItem = ({ task }) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 className={`
-          rounded-2xl bg-white shadow-lg border-l-4
-          ${task.status === 'completed' ? 'border-green-500' : task.priority === 'high' ? 'border-rose-500' : 'border-purple-500'}
-          hover:shadow-xl transition-shadow duration-300
-        `}
+                    rounded-2xl bg-white shadow-lg border-l-4
+                    ${task.status === 'completed' ? 'border-green-500' :
+                        task.priority === 'high' ? 'border-rose-500' :
+                            'border-purple-500'}
+                    hover:shadow-xl transition-shadow duration-300
+                `}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
                 {isEditing ? (
+                    // Edit Mode
                     <div className="p-6 space-y-4">
+                        {/* Title Input */}
                         <input
                             type="text"
                             name="title"
@@ -110,6 +139,7 @@ const TaskItem = ({ task }) => {
                             className="w-full text-lg font-medium rounded-xl border-purple-100 focus:border-purple-300 focus:ring focus:ring-purple-200"
                         />
 
+                        {/* Description Input */}
                         <textarea
                             name="description"
                             value={editedTask.description}
@@ -118,6 +148,7 @@ const TaskItem = ({ task }) => {
                             className="w-full rounded-xl border-purple-100 focus:border-purple-300 focus:ring focus:ring-purple-200"
                         />
 
+                        {/* Status and Priority Selects */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -148,6 +179,7 @@ const TaskItem = ({ task }) => {
                             </div>
                         </div>
 
+                        {/* Due Date Input */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
                             <input
@@ -159,6 +191,7 @@ const TaskItem = ({ task }) => {
                             />
                         </div>
 
+                        {/* Action Buttons */}
                         <div className="flex justify-end gap-3">
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
@@ -179,6 +212,7 @@ const TaskItem = ({ task }) => {
                         </div>
                     </div>
                 ) : (
+                    // View Mode
                     <div className="relative overflow-hidden">
                         {/* Progress bar */}
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-100">
@@ -191,8 +225,10 @@ const TaskItem = ({ task }) => {
                         </div>
 
                         <div className="p-6">
+                            {/* Title and Action Buttons */}
                             <div className="flex justify-between items-start mb-4">
-                                <h3 className={`text-lg font-semibold ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                <h3 className={`text-lg font-semibold ${task.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'
+                                    }`}>
                                     {task.title}
                                 </h3>
                                 <motion.div
@@ -210,7 +246,7 @@ const TaskItem = ({ task }) => {
                                     <motion.button
                                         whileHover={{ scale: 1.1 }}
                                         whileTap={{ scale: 0.9 }}
-                                        onClick={() => deleteTask(task._id)}
+                                        onClick={handleDelete}
                                         className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-50"
                                     >
                                         <TrashIcon className="h-5 w-5" />
@@ -218,9 +254,12 @@ const TaskItem = ({ task }) => {
                                 </motion.div>
                             </div>
 
+                            {/* Description */}
                             <p className="text-gray-600 mb-4">{task.description}</p>
 
+                            {/* Task Metadata */}
                             <div className="flex flex-wrap items-center gap-4">
+                                {/* Status Button */}
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
@@ -235,13 +274,15 @@ const TaskItem = ({ task }) => {
                                     {task.status.replace('_', ' ')}
                                 </motion.button>
 
+                                {/* Priority Badge */}
                                 <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 ${priorityConfig[task.priority].color}`}>
                                     <span>{priorityConfig[task.priority].icon}</span>
                                     {priorityConfig[task.priority].label}
                                 </span>
 
+                                {/* Due Date Badge */}
                                 <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 
-                  ${daysLeft <= 0 ? 'bg-red-100 text-red-800' :
+                                    ${daysLeft <= 0 ? 'bg-red-100 text-red-800' :
                                         daysLeft <= 3 ? 'bg-amber-100 text-amber-800' :
                                             'bg-blue-100 text-blue-800'}`}
                                 >
