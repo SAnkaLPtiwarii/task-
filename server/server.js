@@ -3,20 +3,30 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
-const taskRoutes = require('./routes/taskRoutes');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 
-// CORS Configuration
+// CORS configuration with all required headers
 app.use(cors({
-    origin: ['https://inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
-    credentials: true
+    origin: ['https://673dd124e23324a5543d2728--inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
 
-app.use(express.json());
-
+// Socket.IO setup with CORS
+const io = socketIo(server, {
+    cors: {
+        origin: ['https://673dd124e23324a5543d2728--inquisitive-froyo-be8b23.netlify.app', 'http://localhost:5173'],
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling']
+});
 // Root route
 app.get('/', (req, res) => {
     res.json({
