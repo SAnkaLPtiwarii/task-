@@ -43,8 +43,9 @@ export function TaskProvider({ children }) {
     const createTask = async (taskData) => {
         try {
             const response = await axios.post(`${API_URL}/api/tasks`, taskData);
-            setTasks(prev => [...prev, response.data]);
+            // Remove local state update - let socket handle it
             toast.success('Task created successfully');
+            return response.data;
         } catch (error) {
             console.error('Error creating task:', error);
             toast.error('Failed to create task');
@@ -56,10 +57,9 @@ export function TaskProvider({ children }) {
     const updateTask = async (taskId, taskData) => {
         try {
             const response = await axios.put(`${API_URL}/api/tasks/${taskId}`, taskData);
-            setTasks(prev => prev.map(task =>
-                task._id === taskId ? response.data : task
-            ));
+            // Remove local state update - let socket handle it
             toast.success('Task updated successfully');
+            return response.data;
         } catch (error) {
             console.error('Error updating task:', error);
             toast.error('Failed to update task');
@@ -71,7 +71,7 @@ export function TaskProvider({ children }) {
     const deleteTask = async (taskId) => {
         try {
             await axios.delete(`${API_URL}/api/tasks/${taskId}`);
-            setTasks(prev => prev.filter(task => task._id !== taskId));
+            // Remove local state update - let socket handle it
             toast.success('Task deleted successfully');
         } catch (error) {
             console.error('Error deleting task:', error);
@@ -115,7 +115,12 @@ export function TaskProvider({ children }) {
         if (!socket) return;
 
         socket.on('taskCreated', (newTask) => {
-            setTasks(prev => [...prev, newTask]);
+            setTasks(prev => {
+                // Check if task already exists
+                const exists = prev.some(task => task._id === newTask._id);
+                if (exists) return prev;
+                return [...prev, newTask];
+            });
         });
 
         socket.on('taskUpdated', (updatedTask) => {
