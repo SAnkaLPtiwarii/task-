@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTaskContext } from '../context/TaskContext';
 import TaskItem from './TaskItem';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const TaskList = () => {
     const { tasks, loading, filters, setFilters } = useTaskContext();
@@ -24,8 +24,8 @@ const TaskList = () => {
 
     return (
         <div className="space-y-6">
+            {/* Filters */}
             <div className="flex flex-wrap gap-4">
-                {/* Status Filter */}
                 <select
                     name="status"
                     value={filters.status}
@@ -38,7 +38,6 @@ const TaskList = () => {
                     <option value="completed">Completed</option>
                 </select>
 
-                {/* Priority Filter */}
                 <select
                     name="priority"
                     value={filters.priority}
@@ -51,7 +50,6 @@ const TaskList = () => {
                     <option value="high">High</option>
                 </select>
 
-                {/* Sort Options */}
                 <select
                     name="sortBy"
                     value={filters.sortBy}
@@ -64,20 +62,41 @@ const TaskList = () => {
                 </select>
             </div>
 
-            <motion.div
-                layout
-                className="grid gap-4"
-            >
-                {tasks.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-xl shadow-lg">
-                        <p className="text-gray-500">No tasks found. Create a new task to get started!</p>
-                    </div>
-                ) : (
-                    tasks.map(task => (
-                        <TaskItem key={task._id} task={task} />
-                    ))
-                )}
-            </motion.div>
+            {/* Tasks List */}
+            <AnimatePresence mode="wait">
+                <motion.div layout className="grid gap-4">
+                    {tasks.length === 0 ? (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="text-center py-12 bg-white rounded-xl shadow-lg"
+                        >
+                            <p className="text-gray-500">
+                                {filters.priority || filters.status
+                                    ? 'No tasks match the selected filters'
+                                    : 'No tasks found. Create a new task to get started!'}
+                            </p>
+                        </motion.div>
+                    ) : (
+                        tasks.map(task => (
+                            <TaskItem key={task._id} task={task} />
+                        ))
+                    )}
+                </motion.div>
+            </AnimatePresence>
+
+            {/* Filter Reset */}
+            {(filters.priority || filters.status || filters.sortBy) && (
+                <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    onClick={() => setFilters({ status: '', priority: '', sortBy: '' })}
+                    className="text-sm text-purple-600 hover:text-purple-700 underline"
+                >
+                    Clear all filters
+                </motion.button>
+            )}
         </div>
     );
 };

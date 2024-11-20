@@ -21,80 +21,25 @@ export const TaskProvider = ({ children }) => {
         sortBy: '',
         priority: ''
     });
-    const socket = useSocket();
 
+    const socket = useSocket();
     const API_URL = import.meta.env.VITE_API_URL;
 
-    // Fetch tasks with filters
-    const fetchTasks = async () => {
-        try {
-            setLoading(true);
-            let url = `${API_URL}/api/tasks`;
-
-            // Add query parameters for filters
-            const params = new URLSearchParams();
-            if (filters.status) params.append('status', filters.status);
-            if (filters.priority) params.append('priority', filters.priority);
-            if (filters.sortBy) params.append('sortBy', filters.sortBy);
-
-            const queryString = params.toString();
-            if (queryString) url += `?${queryString}`;
-
-            const response = await axios.get(url);
-            setTasks(response.data || []);
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            toast.error('Failed to fetch tasks');
-            setTasks([]);
-        } finally {
-            setLoading(false);
-        }
+    // Filter tasks based on current filters
+    const getFilteredTasks = () => {
+        return tasks.filter(task => {
+            if (filters.status && task.status !== filters.status) return false;
+            if (filters.priority && task.priority !== filters.priority) return false;
+            return true;
+        });
     };
 
-    // Create task
-    const createTask = async (taskData) => {
-        try {
-            const response = await axios.post(`${API_URL}/api/tasks`, taskData);
-            setTasks(prev => [...prev, response.data]);
-            toast.success('Task created successfully');
-        } catch (error) {
-            console.error('Error creating task:', error);
-            toast.error('Failed to create task');
-        }
-    };
+    // Sort filtered tasks
+    const getSortedTasks = (filteredTasks) => {
+        if (!filters.sortBy) return filteredTasks;
 
-    // Update task
-    const updateTask = async (taskId, taskData) => {
-        try {
-            const response = await axios.put(`${API_URL}/api/tasks/${taskId}`, taskData);
-            setTasks(prev => prev.map(task =>
-                task._id === taskId ? response.data : task
-            ));
-            toast.success('Task updated successfully');
-        } catch (error) {
-            console.error('Error updating task:', error);
-            toast.error('Failed to update task');
-        }
-    };
-
-    // Delete task
-    const deleteTask = async (taskId) => {
-        try {
-            await axios.delete(`${API_URL}/api/tasks/${taskId}`);
-            setTasks(prev => prev.filter(task => task._id !== taskId));
-            toast.success('Task deleted successfully');
-        } catch (error) {
-            console.error('Error deleting task:', error);
-            toast.error('Failed to delete task');
-        }
-    };
-
-    // Sort tasks
-    const sortTasks = (tasksToSort, sortBy) => {
-        if (!sortBy) return tasksToSort;
-
-        return [...tasksToSort].sort((a, b) => {
-            switch (sortBy) {
+        return [...filteredTasks].sort((a, b) => {
+            switch (filters.sortBy) {
                 case 'dueDate':
                     return new Date(a.dueDate) - new Date(b.dueDate);
                 case 'priority':
@@ -106,49 +51,113 @@ export const TaskProvider = ({ children }) => {
         });
     };
 
-    // Effect for filters
-    useEffect(() => {
-        fetchTasks();
-    }, [filters]);
+    const fetchTasks = async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get(`${API_URL}/api/tasks`);
+            setTasks(response.data || []);
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+            toast.error('Failed to fetch tasks');
+            setTasks([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    // Socket effects
+    const createTask = async (taskData) => {
+        try {
+            const response = await axios.post(`${API_URL}/api/tasks`, taskData);
+            // Don't update state here, let the socket handle it
+            toast.success('Task created successfully');
+            return response.data;
+        } catch (error) {
+            console.error('Error creating task:', error);
+            toast.error('Failed to create task');
+            throw error;
+        }
+    };
+
+    const updateTask = async (taskId, taskData) => {
+        try {
+            const response = await axios.put(`${API_URL}/api/tasks/${taskId}`, taskData);
+            // Don't update state here, let the socket handle it
+            toast.success('Task updated successfully');
+            return response.data;
+        } catch (error) {
+            console.error('Error updating task:', error);
+            toast.error('Failed to update task');
+            throw error;
+        }
+    };
+
+    const deleteTask = async (taskId) => {
+        try {
+            await axios.delete(`${API_URL}/api/tasks/${taskId}`);
+            // Don't update state here, let the socket handle it
+            toast.success('Task deleted successfully');
+        } catch (error) {
+            console.error('Error deleting task:', error);
+            toast.error('Failed to delete task');
+            throw error;
+        }
+    };
+
+    // Socket event handlers
     useEffect(() => {
         if (!socket) return;
 
-        socket.on('taskCreated', (newTask) => {
-            setTasks(prev => [...prev, newTask]);
-        });
+        const handleTaskCreated = (newTask) => {
+            setTasks(prev => {
+                // Check if task already exists
+                if (prev.some(task => task._id === newTask._id)) {
+                    return prev;
+                }
+                return [...prev, newTask];
+            });
+        };
 
-        socket.on('taskUpdated', (updatedTask) => {
+        const handleTaskUpdated = (updatedTask) => {
             setTasks(prev => prev.map(task =>
                 task._id === updatedTask._id ? updatedTask : task
             ));
-        });
+        };
 
-        socket.on('taskDeleted', (taskId) => {
+        const handleTaskDeleted = (taskId) => {
             setTasks(prev => prev.filter(task => task._id !== taskId));
-        });
+        };
+
+        socket.on('taskCreated', handleTaskCreated);
+        socket.on('taskUpdated', handleTaskUpdated);
+        socket.on('taskDeleted', handleTaskDeleted);
 
         return () => {
-            socket.off('taskCreated');
-            socket.off('taskUpdated');
-            socket.off('taskDeleted');
+            socket.off('taskCreated', handleTaskCreated);
+            socket.off('taskUpdated', handleTaskUpdated);
+            socket.off('taskDeleted', handleTaskDeleted);
         };
     }, [socket]);
 
-    const value = {
-        tasks: sortTasks(tasks, filters.sortBy),
-        loading,
-        filters,
-        setFilters,
-        createTask,
-        updateTask,
-        deleteTask,
-        fetchTasks
-    };
+    // Fetch tasks initially
+    useEffect(() => {
+        fetchTasks();
+    }, []);
+
+    // Get filtered and sorted tasks
+    const filteredTasks = getFilteredTasks();
+    const sortedAndFilteredTasks = getSortedTasks(filteredTasks);
 
     return (
-        <TaskContext.Provider value={value}>
+        <TaskContext.Provider value={{
+            tasks: sortedAndFilteredTasks,
+            loading,
+            filters,
+            setFilters,
+            createTask,
+            updateTask,
+            deleteTask,
+            fetchTasks
+        }}>
             {children}
         </TaskContext.Provider>
     );
