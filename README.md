@@ -58,14 +58,6 @@ cd ../client
 npm install
 ```
 
-## Configuration
-
-1. Create a `.env` file in the server directory:
-```env
-MONGODB_URI= mongodb://localhost:27017/taskmanager
-
-PORT=5000
-```
 
 ## Running the Application
 
