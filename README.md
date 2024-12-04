@@ -1,6 +1,6 @@
 # Task Manager Application
 
-A real-time task management application built with MERN stack (MongoDB, Express.js, React, Node.js) and Socket.IO.
+A real-time task management application built with MERN stack (MongoDB, Express.js, React, Node.js).
 
 ## Features
 
